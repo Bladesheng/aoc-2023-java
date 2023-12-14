@@ -4,7 +4,7 @@ import java.util.Map;
 
 public class Day01 {
     public static void main(String[] args) {
-        List<String> lines = ReadFile.read("day_01.txt");
+        List<String> lines = ReadFile.read("resources/day_01.txt");
 
         Map<String, Integer> NUMBERS = new HashMap<>();
         NUMBERS.put("one", 1);

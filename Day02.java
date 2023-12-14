@@ -5,18 +5,17 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 
-public class Day02 {
-    public static void main(String[] args) {
-        String part1 = runPart1();
-        String part2 = runPart2();
-
-        System.out.println(part1);
-        System.out.println(part2);
+public class Day02 extends AocSolver {
+    protected Day02(String filename) {
+        super(filename);
     }
 
-    private static String runPart1() {
-        List<String> lines = ReadFile.read("day_02.txt");
+    public static void main(String[] args) {
+        new Day02("resources/day_02.txt");
+    }
 
+    @Override
+    protected String runPart1(List<String> lines) {
         Map<String, Integer> LIMITS = new HashMap<>();
         LIMITS.put("red", 12);
         LIMITS.put("green", 13);
@@ -48,9 +47,8 @@ public class Day02 {
         return Integer.toString(total);
     }
 
-    private static String runPart2() {
-        List<String> lines = ReadFile.read("day_02.txt");
-
+    @Override
+    protected String runPart2(List<String> lines) {
         int total = 0;
 
         for (String line : lines) {
