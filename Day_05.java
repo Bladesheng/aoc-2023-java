@@ -129,48 +129,62 @@ public class Day_05 extends AocSolver {
             }
         }
 
-        final int THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors();
-        ExecutorService executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+        final int threadPoolSize = Runtime.getRuntime().availableProcessors();
+        ExecutorService executorService = Executors.newFixedThreadPool(threadPoolSize);
         List<Future<Long>> futures = new ArrayList<>();
 
         long minSeed = Long.MAX_VALUE;
 
-        long totalSeeds = seedRanges.stream().mapToLong(SeedRange::getLength).sum();
+        final long totalSeeds = seedRanges.stream().mapToLong(SeedRange::getLength).sum();
         System.out.printf("Total number of seeds: %,d%n", totalSeeds);
-        AtomicInteger rangesDone = new AtomicInteger(0);
+        AtomicInteger chunksDone = new AtomicInteger(0);
 
-        // run all the seed ranges in parallel - speedup from 6 minutes to 90 seconds
+        // brute force - processing every single seed
+        // single thread - 6 minutes
+        // 1 thread per seedRange - 90 seconds (some ranges are smaller than other - CPU isn't 100% utilized the whole time)
+        // 12 threads per seedRange - 50 seconds (100% CPU utilization)
         for (SeedRange seedRange : seedRanges) {
-            Callable<Long> seedRangeTask = () -> {
-                long localMinSeed = Long.MAX_VALUE;
+            // split each range into equal sized chunks based on number of available threads (1 chunk per thread)
+            // and find the lowest seed in that range
+            final long chunkSize = seedRange.getLength() / threadPoolSize;
 
-                for (long seedNumber = seedRange.getStart(); seedNumber < seedRange.getStart() + seedRange.getLength(); seedNumber++) {
-                    Seed seed = new Seed(seedNumber);
+            for (int threadIndex = 0; threadIndex < threadPoolSize; threadIndex++) {
+                final int localThreadIndex = threadIndex;
 
-                    for (Map map : maps) {
-                        long newSeed = map.convert(seed.getSeedNumber());
-                        seed.setSeedNumber(newSeed);
+                Callable<Long> seedRangeTask = () -> {
+                    final long chunkStart = seedRange.getStart() + localThreadIndex * chunkSize;
+                    final long chunkEnd = chunkStart + chunkSize;
+                    long localMinSeed = Long.MAX_VALUE;
+
+                    for (long seedNumber = chunkStart; seedNumber < chunkEnd; seedNumber++) {
+                        Seed seed = new Seed(seedNumber);
+
+                        for (Map map : maps) {
+                            final long newSeed = map.convert(seed.getSeedNumber());
+                            seed.setSeedNumber(newSeed);
+                        }
+
+                        if (seed.getSeedNumber() < localMinSeed) {
+                            localMinSeed = seed.getSeedNumber();
+                        }
                     }
 
-                    if (seed.getSeedNumber() < localMinSeed) {
-                        localMinSeed = seed.getSeedNumber();
-                    }
-                }
+                    System.out.printf("chunk processed (%d/%d)%n", chunksDone.incrementAndGet(), seedRanges.size() * threadPoolSize);
+                    return localMinSeed;
+                };
 
-                System.out.println("range done (" + rangesDone.incrementAndGet() + "/" + seedRanges.size() + ")");
-                return localMinSeed;
-            };
-
-            futures.add(executorService.submit(seedRangeTask));
+                futures.add(executorService.submit(seedRangeTask));
+            }
         }
 
         executorService.shutdown();
 
         try {
             for (Future<Long> future : futures) {
-                long rangeMinSeed = future.get();
+                final long rangeMinSeed = future.get();
                 if (rangeMinSeed < minSeed) {
                     minSeed = rangeMinSeed;
+                    System.out.println("new lowest seed: " + minSeed);
                 }
             }
         } catch (InterruptedException | ExecutionException e) {
