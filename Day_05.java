@@ -1,5 +1,7 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -127,33 +129,52 @@ public class Day_05 extends AocSolver {
             }
         }
 
+        final int THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors();
+        ExecutorService executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+        List<Future<Long>> futures = new ArrayList<>();
+
         long minSeed = Long.MAX_VALUE;
 
-        long seedsDone = 0;
         long totalSeeds = seedRanges.stream().mapToLong(SeedRange::getLength).sum();
-        System.out.println("Total number of seeds: " + totalSeeds);
+        System.out.printf("Total number of seeds: %,d%n", totalSeeds);
+        AtomicInteger rangesDone = new AtomicInteger(0);
 
+        // run all the seed ranges in parallel - speedup from 6 minutes to 90 seconds
         for (SeedRange seedRange : seedRanges) {
-            for (long seedNumber = seedRange.getStart(); seedNumber < seedRange.getStart() + seedRange.getLength(); seedNumber++) {
-                Seed seed = new Seed(seedNumber);
+            Callable<Long> seedRangeTask = () -> {
+                long localMinSeed = Long.MAX_VALUE;
 
-                for (Map map : maps) {
-                    long newSeed = map.convert(seed.getSeedNumber());
-                    seed.setSeedNumber(newSeed);
+                for (long seedNumber = seedRange.getStart(); seedNumber < seedRange.getStart() + seedRange.getLength(); seedNumber++) {
+                    Seed seed = new Seed(seedNumber);
+
+                    for (Map map : maps) {
+                        long newSeed = map.convert(seed.getSeedNumber());
+                        seed.setSeedNumber(newSeed);
+                    }
+
+                    if (seed.getSeedNumber() < localMinSeed) {
+                        localMinSeed = seed.getSeedNumber();
+                    }
                 }
 
-                if (seed.getSeedNumber() < minSeed) {
-                    minSeed = seed.getSeedNumber();
-                }
+                System.out.println("range done (" + rangesDone.incrementAndGet() + "/" + seedRanges.size() + ")");
+                return localMinSeed;
+            };
 
-                seedsDone++;
-                if (seedsDone % 10000000 == 0) {
-                    float progress = (float) seedsDone / totalSeeds;
-                    System.out.println(progress * 100 + " % (" + seedsDone + " seeds done)");
+            futures.add(executorService.submit(seedRangeTask));
+        }
+
+        executorService.shutdown();
+
+        try {
+            for (Future<Long> future : futures) {
+                long rangeMinSeed = future.get();
+                if (rangeMinSeed < minSeed) {
+                    minSeed = rangeMinSeed;
                 }
             }
-
-            System.out.println("range done");
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
         }
 
         return Long.toString(minSeed);
@@ -217,29 +238,26 @@ class Map {
 }
 
 class Range {
-    long destination;
-    long source;
-    long length;
+    final long destination;
+    final long source;
+    final long length;
+    final long offset;
 
 
     public Range(long destination, long source, long length) {
         this.destination = destination;
         this.source = source;
         this.length = length;
+        this.offset = destination - source;
     }
 
 
     public boolean checkIfInRange(long number) {
-        if (number >= source && number < source + length) {
-            return true;
-        }
-
-        return false;
+        return number >= source && number < source + length;
     }
 
 
     public long convert(long number) {
-        long offset = destination - source;
         return number + offset;
     }
 }
